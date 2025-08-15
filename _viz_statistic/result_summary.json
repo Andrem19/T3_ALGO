@@ -1,0 +1,12 @@
+{
+  "out_dir": "_viz_statistic",
+  "n_rows": 1547,
+  "metrics_used": [
+    "updown"
+  ],
+  "corr_csv": "_viz_statistic/corr_vs_profit.csv",
+  "metrics_summary_csv": "_viz_statistic/metrics_summary.csv",
+  "scatter_images": [
+    "_viz_statistic/scatter_updown_vs_profit_by_signal.png"
+  ]
+}
