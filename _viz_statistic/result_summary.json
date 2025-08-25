@@ -1,12 +1,38 @@
 {
   "out_dir": "_viz_statistic",
-  "n_rows": 1547,
+  "n_rows": 83,
   "metrics_used": [
-    "updown"
+    "price_oi_funding",
+    "basis",
+    "flows",
+    "orderbook",
+    "cross",
+    "calendar",
+    "sentiment",
+    "breadth",
+    "stables",
+    "macro",
+    "news_score",
+    "rr25",
+    "iv",
+    "overall"
   ],
   "corr_csv": "_viz_statistic/corr_vs_profit.csv",
   "metrics_summary_csv": "_viz_statistic/metrics_summary.csv",
   "scatter_images": [
-    "_viz_statistic/scatter_updown_vs_profit_by_signal.png"
+    "_viz_statistic/scatter_price_oi_funding_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_basis_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_flows_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_orderbook_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_cross_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_calendar_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_sentiment_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_breadth_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_stables_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_macro_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_news_score_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_rr25_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_iv_vs_profit_by_signal.png",
+    "_viz_statistic/scatter_overall_vs_profit_by_signal.png"
   ]
 }

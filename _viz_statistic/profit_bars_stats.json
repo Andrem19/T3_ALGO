@@ -1,46 +1,46 @@
 {
   "overall": {
-    "total_trades": 1547,
-    "num_wins": 813,
-    "num_losses": 734,
-    "win_rate": 0.5255332902391726,
-    "sum_profit": 1122.1901014476857,
-    "mean_profit": 0.7253976092098808,
-    "median_profit": 1.709234965680789,
-    "max_profit": 19.842728600000118,
-    "max_loss": -20.967908599999962,
-    "cumulative_final": 1122.1901014476857,
+    "total_trades": 83,
+    "num_wins": 46,
+    "num_losses": 37,
+    "win_rate": 0.5542168674698795,
+    "sum_profit": 0.022766448847332966,
+    "mean_profit": 0.00027429456442569836,
+    "median_profit": 0.00043668544173250753,
+    "max_profit": 0.017683100031615655,
+    "max_loss": -0.029524541036260957,
+    "cumulative_final": 0.022766448847332966,
     "max_drawdown": {
-      "max_dd_value": 603.4307399699526,
-      "max_dd_pct": 0.4767940936513151,
-      "peak_idx": 879,
-      "trough_idx": 1229,
-      "duration": 350
+      "max_dd_value": 0.04175030738351127,
+      "max_dd_pct": 21.89965338054528,
+      "peak_idx": 0,
+      "trough_idx": 9,
+      "duration": 9
     }
   },
   "per_signal": {
     "1": {
-      "n": 1547,
-      "wins": 813,
-      "losses": 734,
-      "win_rate": 0.5255332902391726,
-      "sum_profit": 1122.1901014476857,
-      "mean_profit": 0.7253976092098808,
-      "median_profit": 1.709234965680789,
-      "max_profit": 19.842728600000118,
-      "max_loss": -20.967908599999962,
-      "cumulative_final": 1122.1901014476857,
+      "n": 83,
+      "wins": 46,
+      "losses": 37,
+      "win_rate": 0.5542168674698795,
+      "sum_profit": 0.022766448847332966,
+      "mean_profit": 0.00027429456442569836,
+      "median_profit": 0.00043668544173250753,
+      "max_profit": 0.017683100031615655,
+      "max_loss": -0.029524541036260957,
+      "cumulative_final": 0.022766448847332966,
       "max_drawdown": {
-        "max_dd_value": 603.4307399699526,
-        "max_dd_pct": 0.4767940936513151,
-        "peak_idx": 879,
-        "trough_idx": 1229,
-        "duration": 350
+        "max_dd_value": 0.04175030738351127,
+        "max_dd_pct": 21.89965338054528,
+        "peak_idx": 0,
+        "trough_idx": 9,
+        "duration": 9
       },
-      "peak_time": "2024-03-13 01:31:00",
-      "trough_time": "2024-08-05 06:24:00"
+      "peak_time": "2025-08-22 11:00:00",
+      "trough_time": "2025-08-22 20:00:00"
     }
   },
-  "created_at": "2025-08-15T21:01:36.680286Z",
-  "n_rows_saved": 1547
+  "created_at": "2025-08-25T22:06:53.444870Z",
+  "n_rows_saved": 83
 }

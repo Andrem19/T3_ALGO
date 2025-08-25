@@ -5,8 +5,8 @@ import copy
 
 def execute(settings, i, data):
     signal=settings['signal']
-    tp_perc = 0.02
-    sl_perc = 0.02
+    tp_perc = 0.016
+    sl_perc = 0.016
     
     open_price = data[i][1]
     open_time = data[i][0]
@@ -14,7 +14,7 @@ def execute(settings, i, data):
     take_profit = open_price * (1+tp_perc) if signal == 1 else open_price * (1-tp_perc)
     
     fee = set.base_amount * open_price * 0.00045 * 2
-    time_limit = 1430
+    time_limit = settings['hours_to_exp']*60
     it = i-1
 
     amount = 1000 / open_price
@@ -26,7 +26,6 @@ def execute(settings, i, data):
         high = data[it][2]
         low = data[it][3]
         duration = ((data[it][0]+1)-open_time) // 60000
-        
         
         #time-limit
         if duration >=time_limit:
