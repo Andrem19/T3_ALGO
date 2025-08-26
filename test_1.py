@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import logging
@@ -15,6 +16,7 @@ import vizualizer.viz as viz
 import statistic.stat as stat
 import vizualizer.correlation as cor
 
+import joblib
 import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
@@ -431,6 +433,7 @@ def fetch_klines_for_period(
     symbol: str,
     start_t: datetime,
     end_t: datetime,
+    interval: str,
     session: requests.Session,
 ) -> List[Dict[str, Any]]:
     """
@@ -444,7 +447,7 @@ def fetch_klines_for_period(
 
     raw = fetch_binance_klines(
         symbol=symbol,
-        interval="1h",
+        interval=interval,
         start_ms=start_ms,
         end_ms=end_ms_exclusive,
         session=session,
@@ -462,7 +465,7 @@ def align_metrics_with_klines(
 ) -> List[Tuple[int, Dict[str, Any], Dict[str, Any]]]:
     """
     Сопоставляет каждую запись metrics по 'time' с часовой свечой по её open_time.
-    Возвращает список кортежей (i, metric_dict, kline_dict) с нулевой нумерацией i.
+    Возвращает список кортежей (i, metric_dict, kline_dict) с НУЛЕВОЙ НУМЕРАЦИЕЙ i БЕЗ ПРОПУСКОВ.
     Если strict=True и свеча не найдена — бросает исключение.
     Если strict=False — пропускает отсутствующие соответствия с предупреждением.
     """
@@ -480,9 +483,10 @@ def align_metrics_with_klines(
     for k in klines:
         by_open_ms[k["open_time"]] = k
 
-    # 3) Выравнивание
+    # 3) Выравнивание (индекс i делаем плотным 0..N-1 по найденным совпадениям)
     aligned: List[Tuple[int, Dict[str, Any], Dict[str, Any]]] = []
-    for rank, (orig_idx, m, t_hour) in enumerate(with_idx):
+    dense_i = 0
+    for _, m, t_hour in with_idx:
         key_ms = to_ms(t_hour)
         k = by_open_ms.get(key_ms)
         if not k:
@@ -491,9 +495,48 @@ def align_metrics_with_klines(
                 raise KeyError(msg)
             logging.warning(msg + " Пропускаю запись метрик.")
             continue
-        aligned.append((rank, m, k))
+        aligned.append((dense_i, m, k))
+        dense_i += 1
 
     return aligned
+
+# -----------------------------
+# Контекст для произвольного доступа
+# -----------------------------
+
+class AlignedContext:
+    """
+    Контекст, предоставляющий произвольный доступ к сопоставленным данным.
+    Элементы — кортежи (i, m, k), где i — плотный индекс 0..N-1.
+    """
+    def __init__(self, aligned: List[Tuple[int, Dict[str, Any], Dict[str, Any]]]):
+        self._aligned = aligned
+
+    def size(self) -> int:
+        return len(self._aligned)
+
+    def get(self, j: int) -> Optional[Tuple[int, Dict[str, Any], Dict[str, Any]]]:
+        """Абсолютный доступ: вернуть (j, m, k) или None, если j вне диапазона."""
+        if 0 <= j < len(self._aligned):
+            return self._aligned[j]
+        return None
+
+    def get_offset(self, i: int, delta: int) -> Optional[Tuple[int, Dict[str, Any], Dict[str, Any]]]:
+        """Относительный доступ: вернуть элемент с индексом i+delta или None."""
+        j = i + int(delta)
+        return self.get(j)
+
+    def window(self, i: int, *, before: int = 0, after: int = 0) -> List[Tuple[int, Dict[str, Any], Dict[str, Any]]]:
+        """
+        Вернуть окно вокруг i: [i-before, ..., i, ..., i+after], только существующие.
+        """
+        lo = max(0, i - max(0, int(before)))
+        hi = min(len(self._aligned) - 1, i + max(0, int(after)))
+        return [self._aligned[j] for j in range(lo, hi + 1)]
+
+    def all(self) -> List[Tuple[int, Dict[str, Any], Dict[str, Any]]]:
+        """Полный список (без копирования ссылок на m/k). Используйте аккуратно."""
+        return self._aligned
 
 def iter_enumerated_metrics_with_klines(
     metrics: List[Dict[str, Any]],
@@ -501,10 +544,12 @@ def iter_enumerated_metrics_with_klines(
     session: Optional[requests.Session] = None,
     *,
     strict: bool = True,
-) -> Iterator[Tuple[int, Dict[str, Any], Dict[str, Any]]]:
+) -> Iterator[Tuple[int, Dict[str, Any], Dict[str, Any], AlignedContext]]:
     """
     Высокоуровневый генератор: находит границы времени, качает свечи, выравнивает,
-    и возвращает (i, metric, kline) с i = 0..N-1 по возрастанию времени.
+    и возвращает (i, metric, kline, ctx), где i = 0..N-1 по возрастанию времени.
+    'ctx' позволяет на любой итерации обратиться к произвольным соседним и любым другим элементам:
+        - ctx.get(i+1), ctx.get_offset(i, +1), ctx.window(i, before=2, after=3), ctx.size(), ctx.all()
     """
     min_t, max_t, is_mono = compute_time_bounds(metrics)
     if not is_mono:
@@ -516,53 +561,92 @@ def iter_enumerated_metrics_with_klines(
         own_session = True
 
     try:
-        kl = fetch_klines_for_period(symbol, start_t=min_t, end_t=max_t, session=session)
+        kl = fetch_klines_for_period(symbol, start_t=min_t, end_t=max_t, interval="1h", session=session)
         aligned = align_metrics_with_klines(metrics, kl, strict=strict)
+        ctx = AlignedContext(aligned)
         for i, m, k in aligned:
-            yield i, m, k
+            yield i, m, k, ctx
     finally:
         if own_session:
             session.close()
+            
+def iter_both(cur: Dict[str, Any], prev: Dict[str, Any]):
+    # dict_keys поддерживает | начиная с Python 3.9
+    for key in (cur.keys() | prev.keys()):
+        yield key, cur.get(key), prev.get(key)
 
+def find_kline_index(klines, ts_ms: int) -> int:
+    """
+    Возвращает индекс свечи в списке klines, у которой open_time == ts_ms.
+    Если не найдено, возвращает -1.
+    """
+    for i, kline in enumerate(klines):
+        if kline[0] == ts_ms:
+            return i
+    return -1
+    
 def main():
     metrics = load_compact_metrics('metrics.json')
     mn, mx, mono = compute_time_bounds(metrics)
     print(f"Раннее время:  {mn.isoformat()}  (ms={to_ms(mn)})")
     print(f"Позднее время: {mx.isoformat()}  (ms={to_ms(mx)})")
     print(f"Монотонно по времени: {mono}")
+    
+    # dt = datetime.strptime(metrics[0]['time'], "%y-%m-%d %H:%M:%S")
+    # start_time = dt.replace(tzinfo=timezone.utc).timestamp()*1000
+    # dt = datetime.strptime(metrics[-1]['time'], "%y-%m-%d %H:%M:%S")
+    # end_time = dt.replace(tzinfo=timezone.utc).timestamp()*1000  # указываем что это UTC
+    # session = requests.Session()
+    # klines30 = fetch_binance_klines(symbol='BTCUSDT', interval="30m", start_ms=int(start_time), end_ms=int(end_time), session=session)
+    
     with requests.Session() as s:
-        for i, m, k in iter_enumerated_metrics_with_klines(metrics, symbol="BTCUSDT", session=s, strict=False):
+        for i, m, k, ctx in iter_enumerated_metrics_with_klines(metrics, symbol="BTCUSDT", session=s, strict=False):
             # i — индекс в порядке времени (0..), m — ваш словарь метрик, k — словарь со свечой
-            ot = from_ms(k["open_time"]).strftime("%Y-%m-%d %H:%M:%S UTC")
-            profit = (k['open']-k['close'])/k['open']
-            for d, v in m.items():
-                if d == 'time':
-                    continue
-                sv.metrics[d]=v
+            # ctx — произвольный доступ к любым данным: ctx.get(i+1), ctx.get_offset(i, -2), ctx.window(i, before=1, after=2), ...
+            
+            # dt = datetime.strptime(m['time'], "%y-%m-%d %H:%M:%S")
+            # dt = dt.replace(tzinfo=timezone.utc).timestamp()*1000  # указываем что это UTC
+            # ind = find_kline_index(klines30, dt)
 
-            report = {
-                'open_time': k["open_time"],
-                'close_time': k["close_time"],
-                'type_of_signal': 1,
-                'type_of_close': 'time_close',
-                'profit': profit,
-                'duration': 60,
-                'metrics': copy.copy(sv.metrics)
-            }
-            sv.positions_list.append(copy.copy(report))
+            if i > 0:
+                profit = (k['close']-k['open']) / k['open']
+
+                pi, pm, pk = ctx.get_offset(i, -1)
+                sv.metrics['dir'] = (pk['close']-pk['open'])/pk['open']
+                
+                for d, v_now, v_prev in iter_both(m, pm):
+                    if d == 'time':
+                        continue
+                    sv.metrics[f'{d}_trend'] = v_now-v_prev
+                    sv.metrics[d] = v_now
+
+                report = {
+                    'open_time': k["open_time"],
+                    'close_time': k["close_time"],
+                    'type_of_signal': 1,
+                    'type_of_close': 'time_close',
+                    'profit': profit,
+                    'duration': 60,
+                    'metrics': copy.copy(sv.metrics)
+                }
+                sv.positions_list.append(copy.copy(report))
     
     # print(sv.positions_list[0])
-    model = tr.train_metrics_model(sv.positions_list, test_size=0.3, choose_threshold_by="f1")
-    print("Holdout test metrics:", {k: v for k, v in model.test_report.items() if k not in ("report",)})
-    print("Confusion matrix [[TN, FP],[FN, TP]]:\n", model.confusion_matrix)
-    print("Top feature importances:\n", model.feature_importance.head(10))
-    print("Top permutation importances:\n", model.perm_importance.head(10))
-    print("Top pair synergies:\n", model.pair_synergy.head(10))
+    bundle = tr.train_best_model(sv.positions_list, test_size=0.25, n_splits=5, tx_cost=0.0)
+    joblib.dump(bundle, "model_bundle.joblib", compress=0)
+    print("=== Holdout report ===")
+    for k, v in bundle.holdout_report.items():
+        if k != "oof_auc_selected":
+            print(f"{k}: {v}")
+    print("OOF metrics (selected):", bundle.holdout_report["oof_auc_selected"])
+    print("Confusion matrix [ [TN, FP], [FN, TP] ]:\n", bundle.holdout_confusion)
+    print("Top perm importance:\n", bundle.perm_importance.head(10))
+    print("Top pair synergy:\n", bundle.pair_synergy.head(10))
 
-    for ex in sv.positions_list:
-        example_metrics = ex["metrics"]
-
-        print("Example proba:", tr.predict_proba(model, example_metrics), ex['profit'])
+    ex = sv.positions_list[-1]["metrics"]
+    print(ex)
+    print("Proba:", tr.predict_proba(bundle, ex))
+    print("Label (pnl):", tr.predict_label(bundle, ex, mode="pnl"))
     # print("Example label:", tr.predict_label(model, example_metrics))
             
     # viz.plot_profit_bars_with_stats(sv.positions_list, out_dir="_viz_statistic")
